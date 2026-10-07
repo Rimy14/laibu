@@ -110,6 +110,48 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
   return data as T;
 }
 
+export async function apiForm<T>(path: string, formData: FormData): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (e) {
+    const aborted = (e as Error).name === "AbortError";
+    throw new ApiError(
+      aborted
+        ? "Upload took too long. Please check your connection and try again."
+        : "We couldn't reach Laibu. Please check your internet connection.",
+      0,
+      aborted ? "timeout" : "network_error",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (res.status === 428) window.dispatchEvent(new Event(TERMS_REQUIRED_EVENT));
+    const err = (data as { error?: { code?: string; message?: string; requestId?: string } } | null)?.error;
+    throw new ApiError(
+      err?.message ?? "Upload failed. Please try again.",
+      res.status,
+      err?.code ?? "error",
+      err?.requestId,
+    );
+  }
+  return data as T;
+}
+
 /** True when the non-secret "signed in" hint cookie exists for this host. */
 export function hasSessionHint() {
   if (typeof document === "undefined") return false;

@@ -19,6 +19,9 @@ import { TermsGuard } from './terms/terms.guard.js';
 import { TermsService } from './terms/terms.service.js';
 import { MeController } from './me/me.controller.js';
 
+import { DrmModule } from './drm/drm.module.js';
+import { BooksModule } from './books/books.module.js';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
@@ -27,6 +30,8 @@ import { MeController } from './me/me.controller.js';
     DatabaseModule,
     CryptoModule,
     AuditModule,
+    DrmModule,
+    BooksModule,
   ],
   controllers: [HealthController, AuthController, AdminAuthController, TermsController, MeController],
   providers: [
