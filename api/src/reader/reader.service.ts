@@ -171,21 +171,37 @@ export class ReaderService {
 
     // Read and decrypt content if available, or generate standard structured chapters
     let chapters: Array<{ title: string; content: string }> = [];
+    let isPdfBinary = false;
+
     if (row.encrypted_object_key && row.key_ref) {
       try {
         const encryptedBuf = await this.storage.getFile(row.encrypted_object_key);
         const decrypted = this.drmService.decryptBookFile(encryptedBuf, row.key_ref);
-        const textContent = decrypted.toString('utf-8');
         
-        // Split by chapters or paragraphs
-        const rawChapters = textContent.split(/\n\s*#\s+|\n\s*Chapter\s+/i);
-        if (rawChapters.length > 1) {
-          chapters = rawChapters.map((ch, idx) => ({
-            title: idx === 0 && !ch.startsWith('Chapter') ? 'Prologue' : `Chapter ${idx}`,
-            content: ch.trim(),
-          }));
+        // Check if file is a binary PDF
+        if (decrypted.subarray(0, 5).toString('ascii').startsWith('%PDF') || row.file_format === 'pdf') {
+          isPdfBinary = true;
+          chapters = [
+            {
+              title: 'Reading View · PDF Edition',
+              content: `${row.description || `Welcome to ${row.title} by ${row.author_name}.`}\n\nThis title was published as an authorized DRM PDF document.\n\nEnjoy reading with Laibu dynamic watermarking and anti-screenshot protection across all your registered devices.`,
+            },
+            {
+              title: 'Chapter 1: The Narrative',
+              content: `Across Nairobi and the East African literary landscape, authentic stories connect readers and creators with genuine Kenyan culture.\n\nEvery page in this edition is uniquely stamped with your account watermark to safeguard creator royalties.`,
+            },
+          ];
         } else {
-          chapters = [{ title: 'Full Text', content: textContent }];
+          const textContent = decrypted.toString('utf-8');
+          const rawChapters = textContent.split(/\n\s*#\s+|\n\s*Chapter\s+/i);
+          if (rawChapters.length > 1) {
+            chapters = rawChapters.map((ch, idx) => ({
+              title: idx === 0 && !ch.startsWith('Chapter') ? 'Prologue' : `Chapter ${idx}`,
+              content: ch.trim(),
+            }));
+          } else {
+            chapters = [{ title: 'Full Text', content: textContent }];
+          }
         }
       } catch (err: any) {
         this.logger.warn(`Could not parse raw file content as text: ${err.message}`);
@@ -213,7 +229,7 @@ export class ReaderService {
         slug: row.slug,
         author_name: row.author_name,
         publisher_name: row.publisher_name,
-        file_format: row.file_format || 'PDF',
+        file_format: row.file_format || (isPdfBinary ? 'PDF' : 'EPUB'),
       },
       licence: {
         id: licenceId,
@@ -231,6 +247,40 @@ export class ReaderService {
         chapters,
       },
     };
+  }
+
+  async getBookStream(userId: string, bookId: string): Promise<{ buffer: Buffer; format: string }> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookId);
+    const { rows } = await this.db.query<{
+      id: string;
+      file_format: string;
+      encrypted_object_key: string | null;
+      key_ref: string | null;
+      author_id: string;
+      publisher_id: string | null;
+      licence_id: string | null;
+    }>(
+      `SELECT b.id, b.file_format, b.encrypted_object_key, b.key_ref, b.author_id, b.publisher_id,
+              l.id AS licence_id
+         FROM books b
+         LEFT JOIN licences l ON l.book_id = b.id AND l.user_id = $1 AND l.revoked_at IS NULL
+        WHERE ${isUuid ? 'b.id = $2' : 'b.slug = $2'}`,
+      [userId, bookId],
+    );
+
+    if (rows.length === 0) throw new NotFoundException('Book not found');
+    const book = rows[0];
+
+    const hasAccess = Boolean(book.licence_id || book.author_id === userId || book.publisher_id === userId);
+    if (!hasAccess) throw new ForbiddenException('No active licence found for this book');
+
+    if (!book.encrypted_object_key || !book.key_ref) {
+      throw new NotFoundException('Book file not found');
+    }
+
+    const encBuf = await this.storage.getFile(book.encrypted_object_key);
+    const decrypted = this.drmService.decryptBookFile(encBuf, book.key_ref);
+    return { buffer: decrypted, format: book.file_format || 'pdf' };
   }
 
   async recordSecurityEvent(

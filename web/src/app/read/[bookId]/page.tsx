@@ -222,8 +222,11 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
     );
   }
 
+  const [viewMode, setViewMode] = useState<"text" | "pdf">("text");
+
   const chapters = sessionData.content.chapters || [];
   const currentChapter = chapters[currentChapterIdx] || chapters[0];
+  const isPdf = sessionData.book.file_format?.toLowerCase() === "pdf";
 
   const themeClasses = {
     light: "bg-[#fcfbf9] text-[#1c1917] border-[#e7e5e4]",
@@ -265,6 +268,28 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
         </div>
 
         <div className="flex items-center gap-2">
+          {/* PDF vs Text Mode Toggle */}
+          {isPdf && (
+            <div className="flex items-center bg-black/5 dark:bg-white/10 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode("text")}
+                className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
+                  viewMode === "text" ? "bg-amber-500 text-ink-900 font-bold shadow-xs" : "opacity-70"
+                }`}
+              >
+                Text
+              </button>
+              <button
+                onClick={() => setViewMode("pdf")}
+                className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
+                  viewMode === "pdf" ? "bg-amber-500 text-ink-900 font-bold shadow-xs" : "opacity-70"
+                }`}
+              >
+                PDF View
+              </button>
+            </div>
+          )}
+
           {/* Device & DRM Badge */}
           <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-mono bg-black/5 dark:bg-white/10 opacity-90">
             <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -308,26 +333,28 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
           </div>
 
           {/* Font Controls */}
-          <div className="hidden md:flex items-center bg-black/5 dark:bg-white/10 rounded-lg p-0.5">
-            <button
-              onClick={() => setFontFamily(fontFamily === "serif" ? "sans" : "serif")}
-              className="px-2 py-1 rounded text-xs font-mono opacity-80 hover:opacity-100"
-              title="Toggle Font"
-            >
-              <Type className="size-3.5" />
-            </button>
-            <button
-              onClick={() => {
-                const sizes: Array<"sm" | "base" | "lg" | "xl"> = ["sm", "base", "lg", "xl"];
-                const currIdx = sizes.indexOf(fontSize);
-                setFontSize(sizes[(currIdx + 1) % sizes.length]);
-              }}
-              className="px-2 py-1 rounded text-xs font-mono uppercase opacity-80 hover:opacity-100"
-              title="Change Size"
-            >
-              {fontSize}
-            </button>
-          </div>
+          {viewMode === "text" && (
+            <div className="hidden md:flex items-center bg-black/5 dark:bg-white/10 rounded-lg p-0.5">
+              <button
+                onClick={() => setFontFamily(fontFamily === "serif" ? "sans" : "serif")}
+                className="px-2 py-1 rounded text-xs font-mono opacity-80 hover:opacity-100"
+                title="Toggle Font"
+              >
+                <Type className="size-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  const sizes: Array<"sm" | "base" | "lg" | "xl"> = ["sm", "base", "lg", "xl"];
+                  const currIdx = sizes.indexOf(fontSize);
+                  setFontSize(sizes[(currIdx + 1) % sizes.length]);
+                }}
+                className="px-2 py-1 rounded text-xs font-mono uppercase opacity-80 hover:opacity-100"
+                title="Change Size"
+              >
+                {fontSize}
+              </button>
+            </div>
+          )}
 
           {/* Fullscreen Button */}
           <button
@@ -359,11 +386,11 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
         </div>
       )}
 
-      {/* Reading Canvas with Dynamic Dynamic Watermark Grid */}
-      <main className="flex-1 max-w-3xl w-full mx-auto p-6 md:p-12 relative">
+      {/* Reading Canvas with Dynamic Watermark Grid */}
+      <main className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 relative">
         {/* Dynamic Canvas Watermarking Overlay */}
         <div
-          className="pointer-events-none absolute inset-0 overflow-hidden select-none z-10 opacity-15"
+          className="pointer-events-none absolute inset-0 overflow-hidden select-none z-30 opacity-15"
           style={{ userSelect: "none" }}
         >
           <div className="grid grid-cols-2 md:grid-cols-3 gap-y-32 gap-x-16 -rotate-12 transform scale-110 pt-16">
@@ -375,49 +402,61 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
           </div>
         </div>
 
-        {/* Reader Book Content */}
-        <article
-          className={`relative z-20 space-y-6 ${fontFamily === "serif" ? "font-serif" : "font-sans"} ${fontSizeClasses}`}
-        >
-          <div className="border-b pb-4 mb-6 opacity-80 flex items-center justify-between">
-            <span className="font-mono text-xs uppercase tracking-widest">
-              {currentChapter.title}
-            </span>
-            <span className="font-mono text-xs opacity-70">
-              Chapter {currentChapterIdx + 1} of {chapters.length}
-            </span>
+        {/* View Mode: Native PDF Stream vs Formatted Text View */}
+        {viewMode === "pdf" ? (
+          <div className="relative z-20 w-full h-[calc(100vh-140px)] rounded-2xl overflow-hidden border border-border/80 bg-black/5 shadow-inner">
+            <iframe
+              src={`http://localhost:4000/api/reader/books/${sessionData.book.id}/stream`}
+              className="w-full h-full rounded-2xl"
+              title={sessionData.book.title}
+            />
           </div>
+        ) : (
+          <article
+            className={`relative z-20 space-y-6 ${fontFamily === "serif" ? "font-serif" : "font-sans"} ${fontSizeClasses}`}
+          >
+            <div className="border-b pb-4 mb-6 opacity-80 flex items-center justify-between">
+              <span className="font-mono text-xs uppercase tracking-widest">
+                {currentChapter.title}
+              </span>
+              <span className="font-mono text-xs opacity-70">
+                Chapter {currentChapterIdx + 1} of {chapters.length}
+              </span>
+            </div>
 
-          <div className="space-y-6 text-justify whitespace-pre-line leading-relaxed">
-            {currentChapter.content}
-          </div>
-        </article>
+            <div className="space-y-6 text-justify whitespace-pre-line leading-relaxed">
+              {currentChapter.content}
+            </div>
+          </article>
+        )}
       </main>
 
       {/* Bottom Chapter Pagination Navigation */}
-      <footer className="sticky bottom-0 z-40 border-t px-6 py-4 backdrop-blur-md bg-opacity-95 flex items-center justify-between">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentChapterIdx((p) => Math.max(0, p - 1))}
-          disabled={currentChapterIdx === 0}
-        >
-          <ChevronLeft className="size-4 mr-1" /> Previous
-        </Button>
+      {viewMode === "text" && (
+        <footer className="sticky bottom-0 z-40 border-t px-6 py-4 backdrop-blur-md bg-opacity-95 flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentChapterIdx((p) => Math.max(0, p - 1))}
+            disabled={currentChapterIdx === 0}
+          >
+            <ChevronLeft className="size-4 mr-1" /> Previous
+          </Button>
 
-        <div className="text-xs font-mono opacity-80">
-          Chapter {currentChapterIdx + 1} / {chapters.length}
-        </div>
+          <div className="text-xs font-mono opacity-80">
+            Chapter {currentChapterIdx + 1} / {chapters.length}
+          </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentChapterIdx((p) => Math.min(chapters.length - 1, p + 1))}
-          disabled={currentChapterIdx >= chapters.length - 1}
-        >
-          Next <ChevronRight className="size-4 ml-1" />
-        </Button>
-      </footer>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentChapterIdx((p) => Math.min(chapters.length - 1, p + 1))}
+            disabled={currentChapterIdx >= chapters.length - 1}
+          >
+            Next <ChevronRight className="size-4 ml-1" />
+          </Button>
+        </footer>
+      )}
     </div>
   );
 }
