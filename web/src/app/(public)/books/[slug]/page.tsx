@@ -3,10 +3,21 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, ShieldCheck, Smartphone, CheckCircle2, Clock } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  ShieldCheck,
+  Smartphone,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Sparkles,
+} from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
+import { Field } from "@/components/ui/field";
+import { Modal } from "@/components/ui/dialog";
 import { formatKes } from "@/lib/brand";
 import { BookCover } from "@/components/public/book-cover";
 
@@ -30,16 +41,32 @@ interface BookDetail {
   live_at: string | null;
 }
 
+interface CheckoutResponse {
+  orderId: string;
+  checkoutRequestId: string;
+  customerMessage: string;
+  status: "pending" | "paid";
+  amountKes: number;
+}
+
 export default function BookDetailPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
-  const toast = useToast();
+  const { user } = useSession();
 
   const [book, setBook] = useState<BookDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [buying, setBuying] = useState(false);
+
+  // Checkout modal
+  const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
+  const [phone, setPhone] = useState("0712345678");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [activeOrder, setActiveOrder] = useState<CheckoutResponse | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
 
   useEffect(() => {
     async function fetchBook() {
@@ -57,14 +84,49 @@ export default function BookDetailPage() {
     if (slug) fetchBook();
   }, [slug]);
 
-  async function handleBuy() {
-    setBuying(true);
-    // Simulates M-Pesa STK push trigger (Sprint 5)
-    await new Promise((r) => setTimeout(r, 700));
-    setBuying(false);
-    toast.info("M-Pesa STK Push", {
-      description: `Checkout for "${book?.title}" will prompt STK push in Sprint 5.`,
-    });
+  async function handleInitiateCheckout(e: React.FormEvent) {
+    e.preventDefault();
+    if (!book) return;
+
+    if (!user) {
+      router.push(`/login?redirect=/books/${slug}`);
+      return;
+    }
+
+    try {
+      setCheckoutLoading(true);
+      setCheckoutError(null);
+
+      const res = await api<CheckoutResponse>("/checkout", {
+        method: "POST",
+        body: {
+          book_id: book.id,
+          phone,
+        },
+      });
+
+      setActiveOrder(res);
+    } catch (err) {
+      if (err instanceof ApiError) setCheckoutError(err.message);
+      else setCheckoutError("Failed to initiate checkout. Please try again.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
+
+  async function handleSimulateSuccess() {
+    if (!activeOrder) return;
+    try {
+      setSimulating(true);
+      setCheckoutError(null);
+      await api(`/checkout/simulate-success/${activeOrder.orderId}`, { method: "POST" });
+      setOrderSuccess(true);
+    } catch (err) {
+      if (err instanceof ApiError) setCheckoutError(err.message);
+      else setCheckoutError("Simulation failed.");
+    } finally {
+      setSimulating(false);
+    }
   }
 
   if (loading) {
@@ -163,8 +225,7 @@ export default function BookDetailPage() {
 
             <Button
               size="lg"
-              onClick={handleBuy}
-              loading={buying}
+              onClick={() => setCheckoutModalOpen(true)}
               className="w-full text-base font-medium bg-amber-500 hover:bg-amber-400 text-ink-900"
             >
               Buy with M-Pesa
@@ -198,6 +259,122 @@ export default function BookDetailPage() {
           )}
         </div>
       </div>
+
+      {/* M-Pesa STK Push Checkout Modal */}
+      <Modal
+        open={checkoutModalOpen}
+        onClose={() => {
+          setCheckoutModalOpen(false);
+          setActiveOrder(null);
+          setOrderSuccess(false);
+        }}
+        title="M-Pesa Express Checkout"
+        description={`Purchase "${book.title}" for ${formatKes(priceNum)} via Daraja STK Push.`}
+        size="md"
+      >
+        {orderSuccess ? (
+          <div className="py-6 text-center space-y-4">
+            <div className="size-14 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="size-8" />
+            </div>
+            <h3 className="text-xl font-serif font-medium">Payment Received!</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              Your DRM licence has been issued for 3 devices. The book is now waiting in your library.
+            </p>
+            <div className="pt-2 flex justify-center gap-3">
+              <Button onClick={() => router.push("/dashboard/library")}>
+                Go to My Library
+              </Button>
+            </div>
+          </div>
+        ) : activeOrder ? (
+          <div className="space-y-4 pt-2">
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 text-sm space-y-2">
+              <div className="flex items-center gap-2 font-medium">
+                <Clock className="size-4 animate-spin text-amber-600" />
+                <span>STK Push Sent to Phone</span>
+              </div>
+              <p className="text-xs leading-relaxed">
+                {activeOrder.customerMessage}
+              </p>
+            </div>
+
+            {checkoutError && (
+              <div className="p-3 text-xs rounded-md bg-destructive/10 text-destructive flex items-center gap-2">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>{checkoutError}</span>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-lg bg-muted/40 border border-border/40 text-xs text-muted-foreground space-y-1">
+              <div className="flex justify-between">
+                <span>Total Amount:</span>
+                <strong className="text-foreground">{formatKes(activeOrder.amountKes)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Order Reference:</span>
+                <span className="font-mono">{activeOrder.orderId.slice(0, 8)}...</span>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-border/60 flex flex-col gap-2">
+              <Button
+                onClick={handleSimulateSuccess}
+                loading={simulating}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+              >
+                <Sparkles className="size-4" /> Simulate Instant PIN Entry (Dev)
+              </Button>
+              <p className="text-[11px] text-center text-muted-foreground">
+                In production, Safaricom Daraja sends the webhook automatically upon PIN entry.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleInitiateCheckout} className="space-y-4 pt-2">
+            {checkoutError && (
+              <div className="p-3 text-xs rounded-md bg-destructive/10 text-destructive flex items-center gap-2">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>{checkoutError}</span>
+              </div>
+            )}
+
+            <Field
+              label="M-Pesa Phone Number"
+              type="text"
+              required
+              placeholder="0712 345 678"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              hint="Enter the phone that will receive the M-Pesa PIN prompt."
+            />
+
+            <div className="p-3.5 rounded-lg bg-muted/30 border border-border/40 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Book Price</span>
+                <span className="font-medium">{formatKes(priceNum)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Network / Delivery</span>
+                <span className="font-medium text-emerald-600">Free Instant Access</span>
+              </div>
+              <div className="flex justify-between border-t border-border/40 pt-1.5 font-semibold text-sm">
+                <span>Total</span>
+                <span>{formatKes(priceNum)}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCheckoutModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={checkoutLoading}>
+                Send M-Pesa Prompt
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }
