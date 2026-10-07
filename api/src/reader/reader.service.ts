@@ -144,12 +144,12 @@ export class ReaderService {
         `INSERT INTO licence_devices (licence_id, device_id, added_at)
          VALUES ($1, $2, now())
          ON CONFLICT (licence_id, device_id) DO UPDATE SET removed_at = null`,
-        [row.licence_id, deviceId],
+        [licenceId, deviceId],
       );
     } catch (err: any) {
       if (err.code === '23514' || err.message?.includes('device limit')) {
         throw new ForbiddenException(
-          `Device limit (${row.max_devices || 3}) reached for this licence. Revoke an existing device to read on this device.`,
+          `Device limit (${maxDevices}) reached for this licence. Revoke an existing device to read on this device.`,
         );
       }
       throw err;
@@ -158,7 +158,7 @@ export class ReaderService {
     // Active device count
     const { rows: deviceCountRows } = await this.db.query<{ count: string }>(
       `SELECT count(*)::int AS count FROM licence_devices WHERE licence_id = $1 AND removed_at IS NULL`,
-      [row.licence_id],
+      [licenceId],
     );
     const activeDevices = Number(deviceCountRows[0]?.count || 1);
 
@@ -166,7 +166,7 @@ export class ReaderService {
     const maskedContact = row.buyer_phone
       ? `${row.buyer_phone.slice(0, 4)}••••${row.buyer_phone.slice(-3)}`
       : row.buyer_email;
-    const shortLicence = row.licence_id.slice(0, 8).toUpperCase();
+    const shortLicence = licenceId.slice(0, 8).toUpperCase();
     const watermarkText = `Purchased by ${row.buyer_name} · ${maskedContact} · Laibu DRM #${shortLicence}`;
 
     // Read and decrypt content if available, or generate standard structured chapters
@@ -216,9 +216,9 @@ export class ReaderService {
         file_format: row.file_format || 'PDF',
       },
       licence: {
-        id: row.licence_id,
-        issued_at: row.issued_at || new Date().toISOString(),
-        max_devices: row.max_devices || 3,
+        id: licenceId,
+        issued_at: issuedAt,
+        max_devices: maxDevices,
         active_devices: activeDevices,
       },
       watermark: {
