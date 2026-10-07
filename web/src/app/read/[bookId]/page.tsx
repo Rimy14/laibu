@@ -69,6 +69,7 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isBlurred, setIsBlurred] = useState(false);
   const [securityAlert, setSecurityAlert] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"text" | "pdf">("text");
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -221,8 +222,6 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
       </div>
     );
   }
-
-  const [viewMode, setViewMode] = useState<"text" | "pdf">("text");
 
   const chapters = sessionData.content.chapters || [];
   const currentChapter = chapters[currentChapterIdx] || chapters[0];
