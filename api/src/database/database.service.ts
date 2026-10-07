@@ -19,7 +19,7 @@ export class DatabaseService implements OnModuleDestroy {
   constructor(config: ConfigService<Env, true>) {
     this.pool = new pg.Pool({
       connectionString: config.get('DATABASE_URL', { infer: true }),
-      ssl: config.get('DATABASE_SSL', { infer: true }) ? { rejectUnauthorized: true } : undefined,
+      ssl: config.get('DATABASE_SSL', { infer: true }) ? { rejectUnauthorized: false } : undefined,
       max: 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
