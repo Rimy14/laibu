@@ -430,11 +430,17 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
                 <span>Decrypting and loading PDF pages...</span>
               </div>
             ) : pdfBlobUrl ? (
-              <iframe
-                src={`${pdfBlobUrl}#toolbar=0`}
+              <object
+                data={`${pdfBlobUrl}#toolbar=0&navpanes=0`}
+                type="application/pdf"
                 className="w-full h-full rounded-2xl"
-                title={sessionData.book.title}
-              />
+              >
+                <embed
+                  src={`${pdfBlobUrl}#toolbar=0&navpanes=0`}
+                  type="application/pdf"
+                  className="w-full h-full rounded-2xl"
+                />
+              </object>
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-sm space-y-2">
                 <AlertCircle className="size-8 text-amber-500" />
