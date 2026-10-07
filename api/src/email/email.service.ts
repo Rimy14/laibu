@@ -5,6 +5,7 @@ import {
   ApprovalOutcomeEmailParams,
   AuthorApprovalEmailParams,
   EmailPayload,
+  PayoutDisbursedEmailParams,
 } from './email.types.js';
 
 @Injectable()
@@ -128,5 +129,56 @@ The ${this.brandName} team`;
       text,
       html: `<p>${text.replace(/\n/g, '<br/>')}</p>`,
     });
+  }
+
+  async sendPayoutDisbursed(params: PayoutDisbursedEmailParams): Promise<void> {
+    const subject = `Payout Disbursed: KES ${params.netAmountKes.toLocaleString('en-KE', { minimumFractionDigits: 2 })} · ${this.brandName}`;
+    const text = `Hi ${params.recipientName},
+
+Good news! Your earnings for the payout cycle (${params.paydayFormatted}) have been disbursed.
+
+- Net Amount: KES ${params.netAmountKes.toLocaleString('en-KE', { minimumFractionDigits: 2 })}
+- Payment Destination: ${params.payoutMethodLabel}
+- Reference ID: ${params.paymentReference}
+
+Thank you for publishing on ${this.brandName}.
+
+The ${this.brandName} team`;
+
+    const html = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1a1a1a;">
+        <h2 style="color: #10b981;">Payout Successfully Disbursed 🎉</h2>
+        <p>Hi <strong>${params.recipientName}</strong>,</p>
+        <p>Your earnings for the payout cycle ending <strong>${params.paydayFormatted}</strong> have been sent.</p>
+        
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="font-size: 14px; color: #166534; margin: 0 0 4px 0;">Net Amount Disbursed</p>
+          <h1 style="color: #15803d; margin: 0; font-size: 28px;">KES ${params.netAmountKes.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</h1>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tbody>
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+              <td style="padding: 10px; font-weight: bold;">Destination</td>
+              <td style="padding: 10px; text-align: right;">${params.payoutMethodLabel}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+              <td style="padding: 10px; font-weight: bold;">Payment Reference</td>
+              <td style="padding: 10px; text-align: right; font-family: monospace; font-size: 14px;">${params.paymentReference}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+              <td style="padding: 10px; font-weight: bold;">Settlement Cycle</td>
+              <td style="padding: 10px; text-align: right;">${params.paydayFormatted}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p style="font-size: 13px; color: #6b7280; margin-top: 24px;">
+          You can view your detailed sales breakdown and past statements in your creator dashboard at any time.
+        </p>
+      </div>
+    `;
+
+    await this.sendEmail({ to: params.toEmail, subject, text, html });
   }
 }

@@ -29,3 +29,13 @@ export interface ApprovalOutcomeEmailParams {
   authorEmail?: string;
   notes?: string;
 }
+
+export interface PayoutDisbursedEmailParams {
+  toEmail: string;
+  recipientName: string;
+  netAmountKes: number;
+  paymentReference: string;
+  payoutMethodLabel: string;
+  paydayFormatted: string;
+}
+
