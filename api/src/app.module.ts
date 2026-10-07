@@ -21,6 +21,9 @@ import { MeController } from './me/me.controller.js';
 
 import { DrmModule } from './drm/drm.module.js';
 import { BooksModule } from './books/books.module.js';
+import { EmailModule } from './email/email.module.js';
+import { ApprovalsModule } from './approvals/approvals.module.js';
+import { PublisherModule } from './publisher/publisher.module.js';
 
 @Module({
   imports: [
@@ -32,6 +35,9 @@ import { BooksModule } from './books/books.module.js';
     AuditModule,
     DrmModule,
     BooksModule,
+    EmailModule,
+    ApprovalsModule,
+    PublisherModule,
   ],
   controllers: [HealthController, AuthController, AdminAuthController, TermsController, MeController],
   providers: [

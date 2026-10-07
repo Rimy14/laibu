@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, Plus, Upload, CheckCircle2, Clock, AlertCircle, XCircle } from "lucide-react";
+import { BookOpen, Plus, Upload, CheckCircle2, Clock, AlertCircle, XCircle, UserCheck } from "lucide-react";
 import { api, apiForm, ApiError } from "@/lib/api";
+import { useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Modal } from "@/components/ui/dialog";
@@ -14,6 +15,7 @@ interface Book {
   subtitle: string | null;
   description: string | null;
   price_kes: string;
+  author_royalty_pct: string | null;
   status: "draft" | "pending_author" | "declined_by_author" | "pending_admin" | "rejected" | "live" | "delisted";
   drm_status: "pending" | "processing" | "processed" | "failed";
   file_format: string | null;
@@ -23,6 +25,9 @@ interface Book {
 }
 
 export default function MyBooksPage() {
+  const { user } = useSession();
+  const isPublisher = user?.role === "publisher";
+
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -32,6 +37,8 @@ export default function MyBooksPage() {
 
   // Form state
   const [title, setTitle] = useState("");
+  const [authorEmail, setAuthorEmail] = useState("");
+  const [authorRoyaltyPct, setAuthorRoyaltyPct] = useState("70");
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Fiction");
@@ -43,18 +50,19 @@ export default function MyBooksPage() {
   async function loadBooks() {
     try {
       setLoading(true);
-      const res = await api<{ books: Book[] }>("/books/my");
+      const endpoint = isPublisher ? "/publisher/books" : "/books/my";
+      const res = await api<{ books: Book[] }>(endpoint);
       setBooks(res.books);
     } catch {
-      // Ignore initial failure if not signed in as author
+      // Ignore initial failure if not signed in
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadBooks();
-  }, []);
+    if (user) loadBooks();
+  }, [user, isPublisher]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,13 +86,21 @@ export default function MyBooksPage() {
       formData.append("file", bookFile);
       if (coverFile) formData.append("cover", coverFile);
 
-      await apiForm("/books", formData);
+      if (isPublisher) {
+        formData.append("author_email", authorEmail);
+        formData.append("author_royalty_pct", authorRoyaltyPct);
+        await apiForm("/publisher/books", formData);
+        setSuccess("Book created and approval proposal emailed to author!");
+      } else {
+        await apiForm("/books", formData);
+        setSuccess("Book uploaded successfully and submitted for admin review!");
+      }
 
-      setSuccess("Book uploaded successfully and submitted for admin review!");
       setModalOpen(false);
 
       // Reset form
       setTitle("");
+      setAuthorEmail("");
       setSubtitle("");
       setDescription("");
       setBookFile(null);
@@ -107,6 +123,20 @@ export default function MyBooksPage() {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
           <Clock className="size-3.5 animate-spin" /> DRM Encrypting
+        </span>
+      );
+    }
+    if (status === "pending_author") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400">
+          <UserCheck className="size-3.5" /> Awaiting Author Approval
+        </span>
+      );
+    }
+    if (status === "declined_by_author") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400">
+          <XCircle className="size-3.5" /> Declined by Author
         </span>
       );
     }
@@ -142,22 +172,30 @@ export default function MyBooksPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-serif font-medium tracking-tight">My Books</h1>
+          <h1 className="text-2xl font-serif font-medium tracking-tight">
+            {isPublisher ? "Publisher Catalogue" : "My Books"}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Upload, manage DRM-protected manuscripts, and track publication reviews.
+            {isPublisher
+              ? "Publish books with author royalty agreements and manage client titles."
+              : "Upload, manage DRM-protected manuscripts, and track publication reviews."}
           </p>
         </div>
 
         <Button onClick={() => setModalOpen(true)} className="gap-2">
-          <Plus className="size-4" /> Upload New Book
+          <Plus className="size-4" /> {isPublisher ? "Publish Book for Author" : "Upload New Book"}
         </Button>
       </div>
 
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="Upload Book Manuscript"
-        description="Upload a manuscript for DRM encryption and admin review."
+        title={isPublisher ? "Publish Book on Behalf of Author" : "Upload Book Manuscript"}
+        description={
+          isPublisher
+            ? "Enter the author's email and royalty percentage. We will email them an approval proposal link with a worked fee calculation."
+            : "Upload a manuscript for DRM encryption and admin review."
+        }
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
@@ -175,6 +213,29 @@ export default function MyBooksPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+
+          {isPublisher && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-lg bg-muted/40 border border-border/40">
+              <Field
+                label="Author Email Address *"
+                type="email"
+                required
+                placeholder="author@example.com"
+                value={authorEmail}
+                onChange={(e) => setAuthorEmail(e.target.value)}
+              />
+              <Field
+                label="Author Royalty % *"
+                type="number"
+                min="1"
+                max="99"
+                required
+                placeholder="e.g. 70"
+                value={authorRoyaltyPct}
+                onChange={(e) => setAuthorRoyaltyPct(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
@@ -245,7 +306,11 @@ export default function MyBooksPage() {
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Encrypting & Uploading..." : "Upload & Submit"}
+              {submitting
+                ? "Processing..."
+                : isPublisher
+                ? "Submit & Send Proposal"
+                : "Upload & Submit"}
             </Button>
           </div>
         </form>
@@ -259,18 +324,20 @@ export default function MyBooksPage() {
       )}
 
       {loading ? (
-        <div className="py-12 text-center text-muted-foreground text-sm">Loading your books...</div>
+        <div className="py-12 text-center text-muted-foreground text-sm">Loading catalogue...</div>
       ) : books.length === 0 ? (
         <div className="rounded-xl border border-border/60 p-12 text-center bg-card">
           <div className="size-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
             <BookOpen className="size-6" />
           </div>
-          <h3 className="text-base font-serif font-medium">No books uploaded yet</h3>
+          <h3 className="text-base font-serif font-medium">No books in catalogue</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-            Upload your first manuscript. It will be scanned for malware, AES-256 DRM encrypted, and submitted for review.
+            {isPublisher
+              ? "Start publishing books with authors under your account with automatic royalty agreements."
+              : "Upload your first manuscript. It will be scanned for malware, AES-256 DRM encrypted, and submitted for review."}
           </p>
           <Button onClick={() => setModalOpen(true)} className="mt-4 gap-2">
-            <Upload className="size-4" /> Upload Your First Book
+            <Upload className="size-4" /> {isPublisher ? "Publish First Book" : "Upload Your First Book"}
           </Button>
         </div>
       ) : (
@@ -291,6 +358,12 @@ export default function MyBooksPage() {
                 <h3 className="font-serif font-medium text-lg leading-snug">{book.title}</h3>
                 {book.subtitle && (
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{book.subtitle}</p>
+                )}
+
+                {book.author_royalty_pct && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">
+                    Author Royalty: {book.author_royalty_pct}%
+                  </p>
                 )}
 
                 {book.description && (
