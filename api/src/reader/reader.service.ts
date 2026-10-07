@@ -65,6 +65,8 @@ export class ReaderService {
       encrypted_object_key: string | null;
       key_ref: string | null;
       description: string | null;
+      author_id: string;
+      publisher_id: string | null;
       author_name: string;
       publisher_name: string | null;
       licence_id: string | null;
@@ -75,6 +77,7 @@ export class ReaderService {
       buyer_phone: string | null;
     }>(
       `SELECT b.id, b.title, b.subtitle, b.slug, b.file_format, b.encrypted_object_key, b.key_ref, b.description,
+              b.author_id, b.publisher_id,
               u_auth.full_name AS author_name,
               u_pub.full_name AS publisher_name,
               l.id AS licence_id, l.max_devices, l.issued_at,
@@ -94,8 +97,26 @@ export class ReaderService {
 
     const row = bookRows[0];
 
+    // If user is the creator (author/publisher) of this book, auto-create a creator licence if none exists
+    let licenceId = row.licence_id;
+    let maxDevices = row.max_devices || 3;
+    let issuedAt = row.issued_at || new Date().toISOString();
+
+    if (!licenceId && (row.author_id === userId || row.publisher_id === userId)) {
+      const { rows: newLicRows } = await this.db.query<{ id: string; max_devices: number; issued_at: string }>(
+        `INSERT INTO licences (user_id, book_id, max_devices)
+         VALUES ($1, $2, 3)
+         ON CONFLICT (user_id, book_id) DO UPDATE SET revoked_at = null
+         RETURNING id, max_devices, issued_at`,
+        [userId, row.id],
+      );
+      licenceId = newLicRows[0].id;
+      maxDevices = newLicRows[0].max_devices;
+      issuedAt = newLicRows[0].issued_at;
+    }
+
     // Verify DRM Licence
-    if (!row.licence_id) {
+    if (!licenceId) {
       throw new ForbiddenException('You do not own an active DRM licence for this book. Please purchase it from the storefront.');
     }
 

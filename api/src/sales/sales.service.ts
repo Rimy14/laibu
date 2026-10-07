@@ -155,19 +155,24 @@ export class SalesService {
     };
   }
 
-  async getBuyerLibrary(buyerId: string): Promise<LibraryItem[]> {
+  async getBuyerLibrary(userId: string): Promise<LibraryItem[]> {
     const res = await this.db.query<LibraryItem>(
-      `SELECT l.id as licence_id, l.max_devices, l.issued_at,
+      `SELECT DISTINCT ON (b.id)
+              COALESCE(l.id::text, concat('author-', b.id)) as licence_id,
+              COALESCE(l.max_devices, 3) as max_devices,
+              COALESCE(l.issued_at, b.created_at) as issued_at,
               b.id as book_id, b.title, b.slug, b.subtitle, b.file_format, b.cover_object_key,
               u.full_name as author_name,
               p.full_name as publisher_name
-       FROM licences l
-       JOIN books b ON b.id = l.book_id
+       FROM books b
+       LEFT JOIN licences l ON l.book_id = b.id AND l.user_id = $1 AND l.revoked_at IS NULL
        JOIN users u ON u.id = b.author_id
        LEFT JOIN users p ON p.id = b.publisher_id
-       WHERE l.user_id = $1 AND l.revoked_at IS NULL
-       ORDER BY l.issued_at DESC`,
-      [buyerId],
+       WHERE (l.user_id = $1 AND l.revoked_at IS NULL)
+          OR (b.author_id = $1 AND b.status = 'live')
+          OR (b.publisher_id = $1 AND b.status = 'live')
+       ORDER BY b.id, issued_at DESC`,
+      [userId],
     );
     return res.rows;
   }
