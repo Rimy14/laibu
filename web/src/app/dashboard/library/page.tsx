@@ -113,7 +113,7 @@ export default function LibraryPage() {
                   </span>
                 </div>
 
-                <ButtonLink href={`/books/${item.slug}`} variant="outline" className="w-full text-xs">
+                <ButtonLink href={`/read/${item.slug || item.book_id}`} variant="primary" size="sm" className="w-full text-xs font-semibold">
                   Read Book
                 </ButtonLink>
               </div>

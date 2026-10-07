@@ -28,6 +28,7 @@ import { StorefrontModule } from './storefront/storefront.module.js';
 import { CheckoutModule } from './checkout/checkout.module.js';
 import { SalesModule } from './sales/sales.module.js';
 import { PayoutsModule } from './payouts/payouts.module.js';
+import { ReaderModule } from './reader/reader.module.js';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { PayoutsModule } from './payouts/payouts.module.js';
     CheckoutModule,
     SalesModule,
     PayoutsModule,
+    ReaderModule,
   ],
   controllers: [HealthController, AuthController, AdminAuthController, TermsController, MeController],
   providers: [
