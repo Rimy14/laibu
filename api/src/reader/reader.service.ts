@@ -55,6 +55,8 @@ export class ReaderService {
     ip?: string,
     userAgent?: string,
   ): Promise<ReaderSessionResponse> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookId);
+
     // 1. Fetch book and licence
     const { rows: bookRows } = await this.db.query<{
       id: string;
@@ -87,7 +89,7 @@ export class ReaderService {
          LEFT JOIN users u_pub ON u_pub.id = b.publisher_id
          LEFT JOIN licences l ON l.book_id = b.id AND l.user_id = $1 AND l.revoked_at IS NULL
          LEFT JOIN users u_buyer ON u_buyer.id = $1
-        WHERE b.id = $2 OR b.slug = $2`,
+        WHERE ${isUuid ? 'b.id = $2' : 'b.slug = $2'}`,
       [userId, bookId],
     );
 
@@ -254,10 +256,20 @@ export class ReaderService {
       throw new BadRequestException(`Invalid security event type: ${eventType}`);
     }
 
+    let resolvedBookId: string | null = null;
+    if (bookId) {
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookId)) {
+        resolvedBookId = bookId;
+      } else {
+        const { rows: bRows } = await this.db.query<{ id: string }>('SELECT id FROM books WHERE slug = $1', [bookId]);
+        resolvedBookId = bRows[0]?.id || null;
+      }
+    }
+
     await this.db.query(
       `INSERT INTO security_events (user_id, book_id, event_type, page, device_label, ip, user_agent)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId || null, bookId || null, eventType, page || null, deviceLabel || null, ip || null, userAgent ? userAgent.slice(0, 200) : null],
+      [userId || null, resolvedBookId, eventType, page || null, deviceLabel || null, ip || null, userAgent ? userAgent.slice(0, 200) : null],
     );
 
     return { recorded: true };
