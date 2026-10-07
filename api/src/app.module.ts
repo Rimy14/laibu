@@ -24,6 +24,7 @@ import { BooksModule } from './books/books.module.js';
 import { EmailModule } from './email/email.module.js';
 import { ApprovalsModule } from './approvals/approvals.module.js';
 import { PublisherModule } from './publisher/publisher.module.js';
+import { StorefrontModule } from './storefront/storefront.module.js';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PublisherModule } from './publisher/publisher.module.js';
     EmailModule,
     ApprovalsModule,
     PublisherModule,
+    StorefrontModule,
   ],
   controllers: [HealthController, AuthController, AdminAuthController, TermsController, MeController],
   providers: [
