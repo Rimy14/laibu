@@ -152,6 +152,19 @@ export async function apiForm<T>(path: string, formData: FormData): Promise<T> {
   return data as T;
 }
 
+export async function apiBlob(path: string): Promise<string> {
+  const res = await fetch(`/api${path}`, {
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    throw new ApiError("Failed to load document stream.", res.status, "stream_error");
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+
+
 /** True when the non-secret "signed in" hint cookie exists for this host. */
 export function hasSessionHint() {
   if (typeof document === "undefined") return false;
