@@ -26,6 +26,8 @@ const nextConfig: NextConfig = {
   // cannot carry the per-request CSP nonce. Laibu handles personal and payment
   // data, so we keep the strict nonce CSP and render per request instead.
   cacheComponents: false,
+  // pdfjs-dist uses browser APIs; keep it out of the server bundle.
+  serverExternalPackages: ["pdfjs-dist"],
   turbopack: {
     root: __dirname,
     rules: {

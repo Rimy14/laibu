@@ -76,9 +76,11 @@ function buildCsp(nonce: string) {
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self'",
-    `connect-src 'self'${isDev ? " ws:" : ""}`,
+    `connect-src 'self' https://cdn.jsdelivr.net${isDev ? " ws:" : ""}`,
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
+    // blob: frame-src is required for the DRM PDF reader (<iframe src="blob:...">)
+    "frame-src blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

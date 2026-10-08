@@ -169,8 +169,8 @@ export class SalesService {
        JOIN users u ON u.id = b.author_id
        LEFT JOIN users p ON p.id = b.publisher_id
        WHERE (l.user_id = $1 AND l.revoked_at IS NULL)
-          OR (b.author_id = $1 AND b.status = 'live')
-          OR (b.publisher_id = $1 AND b.status = 'live')
+          OR (b.author_id = $1)
+          OR (b.publisher_id = $1)
        ORDER BY b.id, issued_at DESC`,
       [userId],
     );

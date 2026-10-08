@@ -18,7 +18,8 @@ import {
   EyeOff,
   Sparkles,
 } from "lucide-react";
-import { api, apiBlob, ApiError } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { PdfViewer } from "@/components/reader/pdf-viewer";
 import { useSession } from "@/lib/session";
 import { Button, ButtonLink } from "@/components/ui/button";
 
@@ -70,9 +71,6 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
   const [isBlurred, setIsBlurred] = useState(false);
   const [securityAlert, setSecurityAlert] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"text" | "pdf">("text");
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [loadingPdf, setLoadingPdf] = useState(false);
-
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Device fingerprint generation
@@ -82,24 +80,6 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
     const screen = window.screen;
     return `${nav.userAgent}-${screen.width}x${screen.height}-${nav.language}`;
   }
-
-  // Load decrypted PDF stream as Blob
-  useEffect(() => {
-    async function loadPdfBlob() {
-      if (!sessionData || viewMode !== "pdf" || pdfBlobUrl) return;
-      try {
-        setLoadingPdf(true);
-        const url = await apiBlob(`/reader/books/${sessionData.book.id}/stream`);
-        setPdfBlobUrl(url);
-      } catch (err) {
-        console.error("Failed to load PDF blob stream", err);
-      } finally {
-        setLoadingPdf(false);
-      }
-    }
-
-    loadPdfBlob();
-  }, [sessionData, viewMode, pdfBlobUrl]);
 
   // Log DRM capture security event
   async function logSecurityEvent(eventType: string) {
@@ -421,33 +401,18 @@ export default function BookReaderPage({ params }: { params: Promise<{ bookId: s
           </div>
         </div>
 
-        {/* View Mode: Native PDF Stream vs Formatted Text View */}
+        {/* View Mode: PDF.js Canvas Renderer vs Formatted Text View */}
         {viewMode === "pdf" ? (
           <div className="relative z-20 w-full h-[calc(100vh-140px)] rounded-2xl overflow-hidden border border-border/80 bg-black/5 shadow-inner">
-            {loadingPdf ? (
-              <div className="w-full h-full flex flex-col items-center justify-center space-y-2 text-muted-foreground text-sm">
-                <div className="size-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
-                <span>Decrypting and loading PDF pages...</span>
-              </div>
-            ) : pdfBlobUrl ? (
-              <object
-                data={`${pdfBlobUrl}#toolbar=0&navpanes=0`}
-                type="application/pdf"
-                className="w-full h-full rounded-2xl"
-              >
-                <embed
-                  src={`${pdfBlobUrl}#toolbar=0&navpanes=0`}
-                  type="application/pdf"
-                  className="w-full h-full rounded-2xl"
-                />
-              </object>
+            {sessionData.book.id ? (
+              <PdfViewer
+                src={`/reader/books/${sessionData.book.id}/stream`}
+                title={sessionData.book.title}
+              />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-sm space-y-2">
-                <AlertCircle className="size-8 text-amber-500" />
-                <span>Could not load PDF document stream. Switch to Text view to read.</span>
-                <Button variant="outline" size="sm" onClick={() => setViewMode("text")}>
-                  Switch to Text View
-                </Button>
+                <div className="size-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+                <span>Fetching encrypted PDF stream...</span>
               </div>
             )}
           </div>
